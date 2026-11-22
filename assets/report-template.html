@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>草稿到作品 · 体检与重构方案</title>
+  <style>
+    :root {
+      --paper: #f7f4ee;
+      --surface: #fffdf9;
+      --ink: #1b1a17;
+      --muted: #6e6a61;
+      --rule: #e2ddd3;
+      --pro: #27593a; --pro-bg: #edf5ef;
+      --semi: #945d1f; --semi-bg: #faf3e8;
+      --draft: #993730; --draft-bg: #faecea;
+      --fast: #1e4e68; --fast-bg: #eaf3f8;
+      --opus: #4c2a6b; --opus-bg: #f3edf8;
+      --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--paper); color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Noto Sans SC", sans-serif;
+      line-height: 1.68; -webkit-font-smoothing: antialiased; padding: 44px 24px 96px;
+    }
+    .page { max-width: 960px; margin: 0 auto; }
+    .serif { font-family: Georgia, "Songti SC", "Noto Serif SC", serif; }
+    .mono { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 0.88em; }
+
+    header.masthead { border-top: 2px solid var(--ink); border-bottom: 1px solid var(--rule); padding: 24px 0 18px; margin-bottom: 28px; }
+    .kicker { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+    h1.title { font-size: 28px; font-weight: 600; margin: 0 0 6px; letter-spacing: -0.02em; }
+    .meta-line { color: var(--muted); font-size: 13px; margin: 0; }
+
+    .reveal { opacity: 0; transform: translateY(12px); transition: opacity 0.55s var(--ease), transform 0.55s var(--ease); }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+
+    /* Inverted Pyramid Top Hero */
+    .hero-card { background: var(--surface); border: 1px solid var(--rule); padding: 28px 30px; margin-bottom: 22px; }
+    .summary-spread { display: grid; grid-template-columns: 190px 1fr; gap: 32px; align-items: center; }
+    .ring-wrap { position: relative; width: 156px; height: 156px; margin: 0 auto; }
+    .ring-wrap svg { transform: rotate(-90deg); width: 156px; height: 156px; }
+    .ring-track { fill: none; stroke: var(--rule); stroke-width: 6; }
+    .ring-fill { fill: none; stroke: var(--ink); stroke-width: 6; stroke-linecap: round; stroke-dasharray: 440; stroke-dashoffset: 440; transition: stroke-dashoffset 1s var(--ease); }
+    .ring-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+    .ring-num { font-size: 40px; font-weight: 600; line-height: 1; }
+    .ring-label { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+    .tldr { border-left: 2px solid var(--ink); padding: 2px 0 2px 14px; font-size: 14px; margin: 0 0 16px; }
+
+    /* 4 KPI Quartet */
+    .kpi-quartet { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
+    .kpi { background: var(--paper); border: 1px solid var(--rule); padding: 10px 12px; }
+    .kpi-val { font-size: 20px; font-weight: 600; line-height: 1.2; }
+    .kpi-lbl { font-size: 11.5px; color: var(--muted); }
+
+    .dim-row { display: grid; grid-template-columns: 180px 1fr 48px; gap: 10px; align-items: center; margin-bottom: 8px; font-size: 12.5px; }
+    .dim-track { height: 5px; background: #e8e3d9; overflow: hidden; }
+    .dim-fill { height: 100%; width: 0%; background: var(--ink); transition: width 0.85s var(--ease); }
+
+    /* Primary Visual Focus: Action & Model-Tier Matrix */
+    .action-box { background: var(--surface); border: 1px solid var(--rule); padding: 26px 30px; margin-bottom: 24px; }
+    .sec-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+    .sec-head h2 { font-size: 19px; margin: 0; font-weight: 600; }
+    .sec-sub { font-size: 13px; color: var(--muted); margin: 0; }
+
+    /* Progressive Disclosure Drawers */
+    details.drawer { background: var(--surface); border: 1px solid var(--rule); margin-bottom: 12px; }
+    details.drawer > summary {
+      cursor: pointer; list-style: none; padding: 16px 22px; font-size: 15.5px; font-weight: 600;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    details.drawer > summary::-webkit-details-marker { display: none; }
+    details.drawer > summary::after { content: "展开细节 ▾"; font-size: 12px; font-weight: 400; color: var(--muted); }
+    details.drawer[open] > summary::after { content: "收起 ▴"; }
+    .drawer-body { padding: 4px 22px 22px; border-top: 1px solid var(--rule); }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+    th { font-size: 11.5px; color: var(--muted); font-weight: 500; }
+
+    .tag { display: inline-block; padding: 2px 7px; font-size: 11.5px; font-weight: 500; white-space: nowrap; }
+    .tag-pro { color: var(--pro); background: var(--pro-bg); }
+    .tag-semi { color: var(--semi); background: var(--semi-bg); }
+    .tag-draft { color: var(--draft); background: var(--draft-bg); }
+    .tag-fast { color: var(--fast); background: var(--fast-bg); }
+    .tag-opus { color: var(--opus); background: var(--opus-bg); }
+
+    .arch-layer { background: var(--paper); border: 1px solid var(--rule); padding: 10px 14px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+    .res-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 14px; }
+    .res-card { border-top: 2px solid var(--ink); padding-top: 8px; }
+    .res-card h3 { font-size: 13.5px; margin: 0 0 4px; }
+    .res-card p { font-size: 12.5px; color: var(--muted); margin: 0; }
+
+    details.tree-node { margin-left: 16px; border-left: 1px solid var(--rule); padding-left: 12px; margin-top: 4px; }
+    details.tree-node > summary { cursor: pointer; list-style: none; font-size: 13px; padding: 3px 0; }
+    .tree-leaf { margin-left: 16px; padding: 3px 0 3px 12px; border-left: 1px solid var(--rule); font-size: 13px; }
+
+    @media (max-width: 760px) {
+      .summary-spread, .kpi-quartet, .res-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="masthead reveal">
+      <div class="kicker">Draft-to-Opus · Bottom-Up Codebase Audit</div>
+      <h1 class="title serif" id="project-title">项目体检与重构方案</h1>
+      <p class="meta-line" id="project-meta">只读诊断模式 · 尚未改动任何源码</p>
+    </header>
+
+    <!-- 1. Inverted Pyramid Hero -->
+    <section class="hero-card reveal">
+      <div class="summary-spread">
+        <div class="ring-wrap">
+          <svg viewBox="0 0 160 160">
+            <circle class="ring-track" cx="80" cy="80" r="70" />
+            <circle class="ring-fill" id="score-ring" cx="80" cy="80" r="70" />
+          </svg>
+          <div class="ring-center">
+            <div class="ring-num serif" id="score-num">0</div>
+            <div class="ring-label" id="score-verdict">评估中</div>
+          </div>
+        </div>
+        <div>
+          <p class="tldr" id="plain-summary"></p>
+          <div class="kpi-quartet" id="kpi-quartet"></div>
+          <div id="dim-bars"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. Primary Action Focus: Risk x Payoff + Model Tier -->
+    <section class="action-box reveal">
+      <div class="sec-head">
+        <h2 class="serif">优先改造清单（按风险 × 收益与模型算力分级）</h2>
+        <p class="sec-sub">低风险、中风险与「高风险高收益」建议修；「高风险中低收益」自动豁免不修</p>
+      </div>
+      <table>
+        <thead><tr><th>改造项</th><th>风险 × 收益</th><th>推荐模型</th><th>执行方式与人话说明</th></tr></thead>
+        <tbody id="action-body"></tbody>
+      </table>
+    </section>
+
+    <!-- 3. Progressive Disclosure Drawers (Click to inspect details) -->
+    <details class="drawer reveal" open>
+      <summary class="serif">01 · 架构分层、抗风险三问与工程发布门禁</summary>
+      <div class="drawer-body">
+        <div id="arch-stack"></div>
+        <div class="res-grid" id="resilience-cards"></div>
+      </div>
+    </details>
+
+    <details class="drawer reveal">
+      <summary class="serif">02 · 前端控件大类盘点（令牌统一 vs 组件合并）</summary>
+      <div class="drawer-body">
+        <table>
+          <thead><tr><th>控件大类</th><th>现状</th><th>建议</th><th>说明</th></tr></thead>
+          <tbody id="frontend-body"></tbody>
+        </table>
+      </div>
+    </details>
+
+    <details class="drawer reveal">
+      <summary class="serif">03 · 后端模块血统树与中等模块异味</summary>
+      <div class="drawer-body">
+        <p style="font-size:12.5px;color:var(--muted);margin:8px 0 12px;">
+          <span class="tag tag-pro">专业</span> 可复用 · <span class="tag tag-semi">半手写</span> 带补丁 · <span class="tag tag-draft">手写草稿</span> 建议重写
+        </p>
+        <div id="backend-tree"></div>
+      </div>
+    </details>
+
+    <details class="drawer reveal">
+      <summary class="serif">04 · 性能热点、数学损失与资源浪费</summary>
+      <div class="drawer-body">
+        <table>
+          <thead><tr><th>类型与位置</th><th>问题</th><th>改良方案</th><th>实际影响</th></tr></thead>
+          <tbody id="perf-body"></tbody>
+        </table>
+      </div>
+    </details>
+
+    <details class="drawer reveal">
+      <summary class="serif">05 · 安全边界、数据状态机、可观测性与豁免区</summary>
+      <div class="drawer-body">
+        <table>
+          <thead><tr><th>审查域与位置</th><th>问题</th><th>修复建议</th><th>潜在后果</th></tr></thead>
+          <tbody id="audit-body"></tbody>
+        </table>
+        <h4 style="font-size:13.5px;margin:18px 0 8px;">虽然丑但别乱动（高风险 × 中低收益豁免）</h4>
+        <ul id="exemption-list" style="margin:0;padding-left:18px;font-size:13px;color:var(--muted);"></ul>
+      </div>
+    </details>
+  </div>
+
+  <script>
+    // AI ONLY NEEDS TO POPULATE THIS CONCISE OBJECT
+    window.REPORT_DATA = {
+      projectName: "示例项目",
+      scanDate: "2026-11-22",
+      totalScore: 74,
+      verdict: "成长期 · 局部收敛",
+      plainSummary: "骨架稳、主流程已通；建议用轻量模型清理重复样式与简单热点，用高阶模型重写 1 处核心补丁模块并补全权限校验。",
+      kpis: [
+        { val: "6 项", lbl: "建议修复" },
+        { val: "1 项", lbl: "高风险高收益" },
+        { val: "4 项", lbl: "轻量模型可修" },
+        { val: "2 项", lbl: "高风险豁免不修" }
+      ],
+      dimensions: [
+        { name: "UI 控件收敛度", score: 11, max: 15 },
+        { name: "非补丁与模块化", score: 11, max: 15 },
+        { name: "性能与数学健康度", score: 14, max: 20 },
+        { name: "架构秩序与抗风险", score: 16, max: 20 },
+        { name: "安全、数据与可观测", score: 14, max: 20 },
+        { name: "发布就绪与可测性", score: 8, max: 10 }
+      ],
+      actions: [
+        { name: "合并 3 套重复扫描按钮", riskPayoff: "低风险 · 中收益", model: "fast", desc: "合并统一：结构完全一致，只换入参即可，轻量模型单文件秒改。" },
+        { name: "目录聚合改祖先哈希索引", riskPayoff: "低风险 · 高收益", model: "fast", desc: "重写小模块：先锁单测快照，O(n²) 降为 O(n)，轻量模型可独立完成。" },
+        { name: "补齐删除命令窗口鉴权", riskPayoff: "高风险 · 高收益", model: "opus", desc: "重写小模块：涉及多窗口权限边界，需高阶推理模型先锁契约再改。" }
+      ],
+      archLayers: [
+        { title: "界面交互层", items: ["主窗口", "托盘面板", "设置页"], note: "只通过标准接口请求后端" },
+        { title: "核心业务层", items: ["文件遍历", "重复识别", "隐私清理"], note: "不直接依赖操作系统细节" },
+        { title: "系统适配层", items: ["Windows", "macOS", "权限助手"], note: "抹平平台差异" }
+      ],
+      resilience: [
+        { title: "关键处能否自愈", body: "后台采样意外退出会自动拉起；删除接口缺窗口鉴权。" },
+        { title: "能不能保证下线", body: "快扫失败自动退回通用遍历，状态读取失败展示缓存。" },
+        { title: "极端情况是否会崩", body: "列表已分页防卡死；深层重复目录存在二次扫描耗时。" }
+      ],
+      frontendInventory: [
+        { category: "扫描触发按钮", variants: "3 个页面各自手写", action: "合并标准组件", note: "仅菜单文案与事件名不同。" }
+      ],
+      backendTree: {
+        name: "核心服务入口", provenance: "pro", desc: "参数检查与错误翻译",
+        children: [
+          { name: "目录聚合模块", provenance: "semi", desc: "有双层循环可提速" },
+          { name: "旧版兼容补丁", provenance: "draft", desc: "建议锁定快照后重写" }
+        ]
+      },
+      perfLosses: [
+        { category: "算法复杂度", location: "directory_aggregation.rs:165", issue: "O(n²) 前缀比对", fix: "改用 HashSet 祖先链降为 O(n)", impact: "几万个嵌套文件夹不再卡顿。" }
+      ],
+      deepAudit: [
+        { domain: "安全边界", location: "commands/cleanup.rs:42", issue: "删除命令未校验窗口来源", fix: "复用已有窗口鉴权守卫", impact: "防止非授权子窗口误删文件。" }
+      ],
+      exemptions: [
+        "系统隐私项规则库（高风险 · 低收益）：规则长期稳定，重写极易漏掉平台兼容细节，不修。"
+      ]
+    };
+
+    const provMap = { pro: ["tag-pro", "专业"], semi: ["tag-semi", "半手写"], draft: ["tag-draft", "手写草稿"] };
+    const modelMap = { fast: ["tag-fast", "轻量快速模型"], opus: ["tag-opus", "高阶推理模型"] };
+
+    function renderAll() {
+      const d = window.REPORT_DATA;
+      document.getElementById("project-title").textContent = `${d.projectName} · 体检与重构方案`;
+      document.getElementById("project-meta").textContent = `扫描日期：${d.scanDate} · 三阶渐进审查（只读，未改源码）`;
+      document.getElementById("score-verdict").textContent = `满分 100 · ${d.verdict}`;
+      document.getElementById("plain-summary").textContent = d.plainSummary || "";
+
+      const ring = document.getElementById("score-ring");
+      setTimeout(() => { ring.style.strokeDashoffset = 440 - (440 * d.totalScore) / 100; }, 100);
+      let cur = 0;
+      const timer = setInterval(() => {
+        cur = Math.min(d.totalScore, cur + Math.max(1, Math.ceil(d.totalScore / 28)));
+        document.getElementById("score-num").textContent = cur;
+        if (cur >= d.totalScore) clearInterval(timer);
+      }, 24);
+
+      document.getElementById("kpi-quartet").innerHTML = (d.kpis || []).map(k =>
+        `<div class="kpi"><div class="kpi-val serif">${k.val}</div><div class="kpi-lbl">${k.lbl}</div></div>`).join("");
+
+      document.getElementById("dim-bars").innerHTML = d.dimensions.map(dim => `
+        <div class="dim-row">
+          <span>${dim.name}</span>
+          <div class="dim-track"><div class="dim-fill" data-pct="${(dim.score / dim.max) * 100}"></div></div>
+          <span class="mono" style="text-align:right">${dim.score}/${dim.max}</span>
+        </div>`).join("");
+      setTimeout(() => { document.querySelectorAll(".dim-fill").forEach(el => { el.style.width = el.dataset.pct + "%"; }); }, 160);
+
+      document.getElementById("action-body").innerHTML = (d.actions || []).map(a => {
+        const [mCls, mLbl] = modelMap[a.model] || modelMap.fast;
+        return `<tr><td><strong>${a.name}</strong></td><td>${a.riskPayoff}</td><td><span class="tag ${mCls}">${mLbl}</span></td><td>${a.desc}</td></tr>`;
+      }).join("");
+
+      document.getElementById("arch-stack").innerHTML = (d.archLayers || []).map(l =>
+        `<div class="arch-layer"><div><strong>${l.title}</strong> <span style="color:var(--muted);font-size:12px;">${l.note || ""}</span></div><div class="mono" style="font-size:12px;">${(l.items || []).join(" · ")}</div></div>`).join("");
+
+      document.getElementById("resilience-cards").innerHTML = (d.resilience || []).map(r =>
+        `<div class="res-card"><h3>${r.title}</h3><p>${r.body}</p></div>`).join("");
+
+      document.getElementById("frontend-body").innerHTML = (d.frontendInventory || []).map(f =>
+        `<tr><td><strong>${f.category}</strong></td><td>${f.variants}</td><td>${f.action}</td><td>${f.note}</td></tr>`).join("");
+
+      function buildTree(node) {
+        const [cls, lbl] = provMap[node.provenance] || provMap.draft;
+        const badge = `<span class="tag ${cls}">${lbl}</span>`;
+        if (!node.children || !node.children.length) return `<div class="tree-leaf">${node.name} ${badge} <span style="color:var(--muted)">${node.desc || ""}</span></div>`;
+        return `<details class="tree-node" open><summary>${node.name} ${badge} <span style="color:var(--muted)">${node.desc || ""}</span></summary>${node.children.map(buildTree).join("")}</details>`;
+      }
+      document.getElementById("backend-tree").innerHTML = buildTree(d.backendTree);
+
+      document.getElementById("perf-body").innerHTML = (d.perfLosses || []).map(p =>
+        `<tr><td><strong>${p.category}</strong><div class="mono">${p.location}</div></td><td>${p.issue}</td><td>${p.fix}</td><td>${p.impact}</td></tr>`).join("");
+
+      document.getElementById("audit-body").innerHTML = (d.deepAudit || []).map(a =>
+        `<tr><td><strong>${a.domain}</strong><div class="mono">${a.location}</div></td><td>${a.issue}</td><td>${a.fix}</td><td>${a.impact}</td></tr>`).join("");
+
+      document.getElementById("exemption-list").innerHTML = (d.exemptions || []).map(e => `<li>${e}</li>`).join("");
+    }
+
+    const io = new IntersectionObserver(entries => {
+      entries.forEach((e, i) => { if (e.isIntersecting) { setTimeout(() => e.target.classList.add("visible"), i * 50); io.unobserve(e.target); } });
+    }, { threshold: 0.06 });
+    document.querySelectorAll(".reveal").forEach(el => io.observe(el));
+    renderAll();
+  </script>
+</body>
+</html>
